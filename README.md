@@ -5,28 +5,28 @@ A Telegram Mini App authentication proxy for [ttyd](https://github.com/tsl0922/t
 ## How It Works
 
 ```
-┌─────────────┐     HTTPS     ┌──────────────────┐    HTTP     ┌──────────────┐
-│  Telegram    │ ──────────── │  ttyd-telegram-   │ ─────────  │  ttyd        │
-│  Mini App    │  (Funnel/    │  proxy (:8443)    │  localhost  │  (:8080)     │
-│  in chat     │   reverse    │  validates auth   │   only      │  no auth     │
-└─────────────┘   proxy)      └──────────────────┘             └──────────────┘
+┌─────────────┐     HTTPS     ┌──────────────────┐  spawns   ┌──────────────┐
+│  Telegram    │ ──────────── │  ttyd-telegram-   │ ───────── │  ttyd        │
+│  Mini App    │  (Funnel/    │  proxy (:8443)    │  on       │  (:8080)     │
+│  in chat     │   reverse    │  auth + manage    │  demand   │  localhost   │
+└─────────────┘   proxy)      └──────────────────┘           └──────────────┘
 ```
 
-1. **ttyd** runs on `127.0.0.1:8080` with no authentication — it's unreachable from the internet
-2. **ttyd-telegram-proxy** runs on `127.0.0.1:8443` — also unreachable directly
-3. A reverse proxy (Tailscale Funnel, Cloudflare Tunnel, nginx, etc.) terminates HTTPS and forwards to `:8443`
-4. When you open the Mini App in Telegram, the proxy receives [Telegram's `initData`](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app) — a cryptographically signed payload proving who you are
-5. The proxy validates the HMAC-SHA256 signature using your bot token, checks the user ID matches `TELEGRAM_ALLOWED_USERS`, and sets a session cookie
-6. With a valid session, all HTTP and WebSocket traffic is proxied through to ttyd
+1. **ttyd is not running** until you open the Mini App
+2. You tap "Terminal" in Telegram — the auth page loads and sends your viewport width
+3. The proxy validates [Telegram's `initData`](https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app) (HMAC-SHA256), checks your user ID, and **spawns ttyd with the right font size** for your screen
+4. A session cookie is set and you're proxied through to ttyd
+5. Subsequent opens reuse the same ttyd instance (single session)
+6. After 30 minutes of inactivity (configurable), ttyd is automatically killed
 
-**If you open the URL in a regular browser** (not from Telegram), you see an auth page that says "This app must be opened from Telegram." — the `initData` is only available inside the Telegram client.
+**If you open the URL in a regular browser** (not Telegram), you see "This app must be opened from Telegram."
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 18
-- [ttyd](https://github.com/tsl0922/ttyd) installed and running
+- [ttyd](https://github.com/tsl0922/ttyd) installed (but **not** running — the proxy manages it)
 - A Telegram bot (created via [@BotFather](https://t.me/BotFather))
-- An HTTPS reverse proxy to expose port 8443 publicly (Tailscale Funnel, Cloudflare Tunnel, Caddy, nginx, etc.)
+- An HTTPS reverse proxy (Tailscale Funnel, Cloudflare Tunnel, Caddy, nginx, etc.)
 
 ## Setup
 
@@ -34,7 +34,7 @@ A Telegram Mini App authentication proxy for [ttyd](https://github.com/tsl0922/t
 
 1. Message [@BotFather](https://t.me/BotFather) on Telegram
 2. Send `/newbot`, follow the prompts — you'll get a **bot token** like `123456789:AABBccDDeeFF...`
-3. **Get your Telegram user ID**: message [@userinfobot](https://t.me/userinfobot) — it will reply with your numeric ID
+3. **Get your Telegram user ID**: message [@userinfobot](https://t.me/userinfobot) — it replies with your numeric ID
 
 ### 2. Install
 
@@ -55,35 +55,14 @@ Edit `.env`:
 ```env
 TELEGRAM_BOT_TOKEN=123456789:AABBccDDeeFF...   # From BotFather
 TELEGRAM_ALLOWED_USERS=123456789                 # Your Telegram user ID
-TTYD_URL=http://127.0.0.1:8080                   # Where ttyd is running
-PROXY_PORT=8443                                   # Port for the auth proxy
+TTYD_PORT=8080                                   # Port for ttyd (localhost)
+PROXY_PORT=8443                                  # Port for the auth proxy
+TTYD_BIN=ttyd                                    # Path to ttyd binary
+TTYD_SHELL=/bin/bash                             # Shell to launch
+TTYD_IDLE_TIMEOUT=1800                           # Kill ttyd after N seconds idle
 ```
 
-### 4. Configure ttyd (localhost only)
-
-Make sure ttyd binds to localhost so it's not directly accessible:
-
-```bash
-ttyd --writable -i lo -p 8080 \
-  -t fontSize=18 \
-  -t fontFamily='JetBrains Mono,Menlo,Consolas,monospace' \
-  /bin/bash -l
-```
-
-The `-i lo` flag binds to the loopback interface only. The `-t` flags pass [xterm.js options](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) to the client. A systemd unit is included — see `ttyd.service`.
-
-**Common `-t` options:**
-
-| Option | Example | Description |
-|--------|---------|-------------|
-| `fontSize` | `18` | Font size in pixels (default: 15) |
-| `fontFamily` | `'JetBrains Mono,monospace'` | Font stack |
-| `cursorBlink` | `true` | Blinking cursor |
-| `cursorStyle` | `bar` | `block`, `underline`, or `bar` |
-| `theme` | `{"background":"#1a1b26"}` | JSON theme object |
-| `lineHeight` | `1.2` | Line height multiplier |
-
-### 5. Set Up HTTPS
+### 4. Set Up HTTPS
 
 The proxy must be served over HTTPS (Telegram Mini Apps require it). Pick one:
 
@@ -105,7 +84,7 @@ your-domain.com {
 }
 ```
 
-### 6. Register the Mini App with Telegram
+### 5. Register the Mini App with Telegram
 
 Set your bot's menu button to open the Mini App:
 
@@ -126,7 +105,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setChatMenuButton" \
 
 Now open your bot's chat in Telegram — you'll see a **"Terminal"** button at the bottom.
 
-### 7. Run
+### 6. Run
 
 **Directly:**
 ```bash
@@ -135,34 +114,43 @@ node server.js
 
 **With systemd (recommended):**
 
-Copy the service files to your user systemd directory:
 ```bash
-cp ttyd.service ttyd-proxy.service ~/.config/systemd/user/
+mkdir -p ~/.config/systemd/user
+cp ttyd-proxy.service ~/.config/systemd/user/
 ```
 
-> **Note:** The service files use `%h` (home directory) specifiers. If your install path differs from `~/.hermes/ttyd-proxy/`, edit `ttyd-proxy.service` accordingly.
+> **Note:** The service file uses `%h` (home directory). Edit paths if your install differs from `~/.hermes/ttyd-proxy/`.
 
 ```bash
 systemctl --user daemon-reload
-systemctl --user enable --now ttyd ttyd-proxy
+systemctl --user enable --now ttyd-proxy
 ```
 
 Check status:
 ```bash
-systemctl --user status ttyd ttyd-proxy
+systemctl --user status ttyd-proxy
 ```
+
+> **Do not** run ttyd as a separate service. The proxy spawns and manages it automatically.
+
+## Responsive Font Sizing
+
+The auth page measures your viewport width and sends it to the server. The proxy calculates an optimal font size (targeting ~80 columns) and spawns ttyd with `-t fontSize=N`. The font size is clamped between 10px and 22px.
+
+Since ttyd's font size is set at spawn time via xterm.js options, the terminal renders at the right size from the first frame — no post-load resizing flicker.
 
 ## Security Model
 
 | Layer | Protection |
 |-------|------------|
-| **ttyd** | Bound to `127.0.0.1` — unreachable from the network |
+| **ttyd** | Only runs when needed, bound to `127.0.0.1`, no auth (unreachable from network) |
 | **Proxy** | Bound to `127.0.0.1` — only the HTTPS reverse proxy can reach it |
 | **Telegram initData** | HMAC-SHA256 validated with bot token — cryptographic proof of identity |
 | **User ID check** | Only `TELEGRAM_ALLOWED_USERS` can authenticate |
 | **Session cookies** | `HttpOnly`, `Secure`, `SameSite=None`, 24h TTL |
-| **WebSocket auth** | Upgrade requests also checked for valid session cookie |
-| **HTTPS** | TLS termination handled by the reverse proxy (Funnel/Cloudflare/etc.) |
+| **WebSocket auth** | Upgrade requests also require valid session cookie |
+| **Idle timeout** | ttyd auto-kills after configurable inactivity period (default: 30 min) |
+| **HTTPS** | TLS termination by the reverse proxy |
 
 ## Environment Variables
 
@@ -170,18 +158,21 @@ systemctl --user status ttyd ttyd-proxy
 |----------|----------|---------|-------------|
 | `TELEGRAM_BOT_TOKEN` | ✅ | — | Bot token from BotFather |
 | `TELEGRAM_ALLOWED_USERS` | ✅ | — | Your Telegram numeric user ID |
-| `TTYD_URL` | | `http://127.0.0.1:8080` | ttyd backend URL |
-| `PROXY_PORT` | | `8443` | Port for the proxy to listen on |
+| `TTYD_PORT` | | `8080` | Port ttyd listens on (localhost) |
+| `PROXY_PORT` | | `8443` | Port for the proxy |
+| `TTYD_BIN` | | `ttyd` | Path to ttyd binary |
+| `TTYD_SHELL` | | `/bin/bash` | Shell to spawn |
+| `TTYD_IDLE_TIMEOUT` | | `1800` | Seconds of inactivity before killing ttyd |
 
 ## Troubleshooting
 
-**"This app must be opened from Telegram"** — You're accessing the URL directly in a browser. Open it through the bot's menu button in the Telegram app.
+**"This app must be opened from Telegram"** — You're accessing the URL directly. Open it through the bot's menu button in Telegram.
 
-**Auth fails silently** — Check that `TELEGRAM_ALLOWED_USERS` matches your exact numeric user ID (not your username). Use [@userinfobot](https://t.me/userinfobot) to confirm.
+**"Failed to start terminal"** — Check that `TTYD_BIN` points to a valid ttyd binary. Run `ttyd --version` to verify.
 
 **WebSocket disconnects** — Make sure your reverse proxy supports WebSocket upgrades. Tailscale Funnel and Cloudflare Tunnel handle this automatically.
 
-**ttyd unavailable (502)** — The proxy can't reach ttyd. Check that ttyd is running on the configured port: `ss -tlnp | grep 8080`.
+**Terminal closes after 30 min** — That's the idle timeout. Set `TTYD_IDLE_TIMEOUT` higher in `.env`, or the keep-alive ping in the wrapper page prevents it while the tab is open.
 
 ## License
 
