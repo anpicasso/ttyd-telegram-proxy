@@ -139,6 +139,16 @@ The auth page measures your viewport width and sends it to the server. The proxy
 
 Since ttyd's font size is set at spawn time via xterm.js options, the terminal renders at the right size from the first frame — no post-load resizing flicker.
 
+## Mobile Clipboard (Copy & Paste)
+
+xterm.js captures all touch events for terminal input, which prevents the native iOS/Android text selection from working. The wrapper page includes a bottom toolbar with three buttons:
+
+- **Select All** — selects the entire visible terminal buffer
+- **Copy** — copies the current selection to clipboard (with fallback for restricted WebView contexts)
+- **Paste** — reads from clipboard and sends to the terminal
+
+The toolbar is styled to blend with the terminal theme and resizes the terminal iframe to avoid overlap.
+
 ## Security Model
 
 | Layer | Protection |

@@ -268,15 +268,131 @@ const TERMINAL_HTML = `<!DOCTYPE html>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden;background:#000}
-    iframe{width:100%;height:100%;border:none}
+    iframe{width:100%;height:100vh;border:none;display:block}
+    #toolbar{
+      position:fixed;bottom:0;left:0;right:0;
+      display:flex;gap:1px;background:#1a1a2e;
+      z-index:100;padding:4px 6px;
+      border-top:1px solid #333;
+    }
+    #toolbar button{
+      flex:1;
+      background:#2a2a3e;color:#c8c8d4;
+      border:none;border-radius:6px;
+      padding:10px 0;font-size:13px;
+      font-family:-apple-system,system-ui,sans-serif;
+      cursor:pointer;-webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;
+    }
+    #toolbar button:active{background:#7c3aed;color:#fff}
+    #toolbar button.flash{background:#22c55e;color:#000;transition:none}
+    #toast{
+      position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+      background:rgba(0,0,0,.85);color:#fff;
+      padding:8px 20px;border-radius:8px;font-size:14px;
+      font-family:-apple-system,system-ui,sans-serif;
+      pointer-events:none;opacity:0;transition:opacity .2s;z-index:200;
+    }
+    #toast.show{opacity:1}
   </style>
 </head>
 <body>
   <iframe id="ttyd" src="/_ttyd/"></iframe>
+  <div id="toolbar">
+    <button id="btnSelect" ontouchstart="">Select All</button>
+    <button id="btnCopy" ontouchstart="">Copy</button>
+    <button id="btnPaste" ontouchstart="">Paste</button>
+  </div>
+  <div id="toast"></div>
   <script>
     var tg = window.Telegram && Telegram.WebApp;
     if(tg){tg.ready();tg.expand();}
-    // Keep session alive — ping every 5 min
+
+    var iframe = document.getElementById('ttyd');
+    var toast = document.getElementById('toast');
+    var toastTimer;
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function(){toast.classList.remove('show')}, 1200);
+    }
+
+    function flashBtn(btn) {
+      btn.classList.add('flash');
+      setTimeout(function(){btn.classList.remove('flash')}, 300);
+    }
+
+    function getTerm() {
+      try { return iframe.contentWindow.term; } catch(e) { return null; }
+    }
+
+    // Select all visible buffer text
+    document.getElementById('btnSelect').addEventListener('click', function() {
+      var term = getTerm();
+      if (!term) return;
+      term.selectAll();
+      showToast('Selected all');
+      flashBtn(this);
+    });
+
+    // Copy current selection to clipboard
+    document.getElementById('btnCopy').addEventListener('click', function() {
+      var term = getTerm();
+      if (!term) return;
+      var sel = term.getSelection();
+      if (!sel) { showToast('Nothing selected'); return; }
+      var btn = this;
+      navigator.clipboard.writeText(sel).then(function() {
+        showToast('Copied');
+        flashBtn(btn);
+        term.clearSelection();
+      }).catch(function() {
+        // Fallback for restricted contexts
+        var ta = document.createElement('textarea');
+        ta.value = sel;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('Copied');
+        flashBtn(btn);
+        term.clearSelection();
+      });
+    });
+
+    // Paste from clipboard into terminal
+    document.getElementById('btnPaste').addEventListener('click', function() {
+      var term = getTerm();
+      if (!term) return;
+      var btn = this;
+      navigator.clipboard.readText().then(function(text) {
+        if (text) {
+          term.paste(text);
+          showToast('Pasted');
+          flashBtn(btn);
+        } else {
+          showToast('Clipboard empty');
+        }
+      }).catch(function() {
+        showToast('Clipboard access denied');
+      });
+    });
+
+    // Resize iframe to leave room for toolbar
+    function resizeIframe() {
+      var tb = document.getElementById('toolbar');
+      var h = tb ? tb.offsetHeight : 0;
+      iframe.style.height = (window.innerHeight - h) + 'px';
+    }
+    resizeIframe();
+    window.addEventListener('resize', resizeIframe);
+    if(tg) tg.onEvent('viewportChanged', resizeIframe);
+
+    // Keep session alive
     setInterval(function(){fetch('/_ping').catch(function(){})}, 300000);
   </script>
 </body>
