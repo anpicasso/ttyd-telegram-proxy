@@ -64,10 +64,24 @@ PROXY_PORT=8443                                   # Port for the auth proxy
 Make sure ttyd binds to localhost so it's not directly accessible:
 
 ```bash
-ttyd --writable -i lo -p 8080 /bin/bash -l
+ttyd --writable -i lo -p 8080 \
+  -t fontSize=18 \
+  -t fontFamily='JetBrains Mono,Menlo,Consolas,monospace' \
+  /bin/bash -l
 ```
 
-The `-i lo` flag binds to the loopback interface only. A systemd unit is included — see `ttyd.service`.
+The `-i lo` flag binds to the loopback interface only. The `-t` flags pass [xterm.js options](https://xtermjs.org/docs/api/terminal/interfaces/iterminaloptions/) to the client. A systemd unit is included — see `ttyd.service`.
+
+**Common `-t` options:**
+
+| Option | Example | Description |
+|--------|---------|-------------|
+| `fontSize` | `18` | Font size in pixels (default: 15) |
+| `fontFamily` | `'JetBrains Mono,monospace'` | Font stack |
+| `cursorBlink` | `true` | Blinking cursor |
+| `cursorStyle` | `bar` | `block`, `underline`, or `bar` |
+| `theme` | `{"background":"#1a1b26"}` | JSON theme object |
+| `lineHeight` | `1.2` | Line height multiplier |
 
 ### 5. Set Up HTTPS
 

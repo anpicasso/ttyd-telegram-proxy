@@ -64,19 +64,18 @@ function validateInitData(initData) {
     const hash = params.get('hash');
     if (!hash) return null;
 
-    params.delete('hash');
-
-    // Build data-check-string: sorted key=value pairs joined by \n
-    const dataCheckString = [...params.entries()]
+    // Build data-check-string: sorted key=value pairs (decoded) joined by \n
+    const sortedPairs = [...params.entries()]
+      .filter(([k]) => k !== 'hash')
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
-      .join('\n');
+      .map(([k, v]) => `${k}=${v}`);
+    const dataCheckString = sortedPairs.join('\n');
 
-    // secret_key = HMAC-SHA256("WebAppData", bot_token)
+    // secret_key = HMAC-SHA256(key="WebAppData", data=bot_token)
     const secretKey = crypto.createHmac('sha256', 'WebAppData')
       .update(BOT_TOKEN).digest();
 
-    // computed_hash = HMAC-SHA256(secret_key, data_check_string)
+    // computed_hash = HMAC-SHA256(key=secret_key, data=data_check_string)
     const computed = crypto.createHmac('sha256', secretKey)
       .update(dataCheckString).digest('hex');
 
@@ -86,9 +85,7 @@ function validateInitData(initData) {
 
     // Check auth_date freshness (1 hour tolerance)
     const authDate = parseInt(params.get('auth_date') || '0', 10);
-    if (Math.abs(Date.now() / 1000 - authDate) > 3600) {
-      return null;
-    }
+    if (Math.abs(Date.now() / 1000 - authDate) > 3600) return null;
 
     // Check user
     const userJson = params.get('user');

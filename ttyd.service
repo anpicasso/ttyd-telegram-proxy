@@ -3,7 +3,10 @@ Description=ttyd Web Terminal (localhost only)
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env ttyd --writable -i lo -p 8080 /bin/bash -l
+ExecStart=/usr/bin/env ttyd --writable -i lo -p 8080 \
+    -t fontSize=18 \
+    -t fontFamily='JetBrains Mono,Menlo,Consolas,monospace' \
+    /bin/bash -l
 Restart=always
 RestartSec=3
 
