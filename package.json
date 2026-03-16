@@ -1,0 +1,15 @@
+{
+  "name": "ttyd-telegram-proxy",
+  "version": "1.0.0",
+  "description": "Telegram Mini App auth proxy for ttyd",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["ttyd", "telegram", "mini-app", "proxy", "terminal", "auth"],
+  "author": "anpicasso",
+  "license": "MIT",
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=ttyd Web Terminal (localhost only)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env ttyd --writable -i lo -p 8080 /bin/bash -l
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
