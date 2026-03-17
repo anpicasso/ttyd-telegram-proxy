@@ -341,19 +341,34 @@ const TERMINAL_HTML = `<!DOCTYPE html>
       if (!term) return null;
       return term.xterm || term;
     }
+    // Refocus terminal inside iframe so keyboard stays open
+    function refocusTerm() {
+      try {
+        var xt = getXterm();
+        if (xt) xt.focus();
+        else iframe.contentWindow.focus();
+      } catch(e) { iframe.focus(); }
+    }
+
+    // Prevent buttons from stealing focus (keeps iOS keyboard open)
+    document.getElementById('toolbar').addEventListener('touchstart', function(e) {
+      if (e.target.tagName === 'BUTTON') e.preventDefault();
+    }, { passive: false });
+    document.getElementById('toolbar').addEventListener('mousedown', function(e) {
+      if (e.target.tagName === 'BUTTON') e.preventDefault();
+    });
 
     // --- Arrow keys ---
-    // Send escape sequences via ttyd's websocket (xterm.js _core.triggerDataEvent)
     function sendKey(seq) {
       var term = getTerm();
       if (!term) return;
-      // ttyd's term object wraps xterm as term.xterm
       var xt = term.xterm || term;
       if (xt._core && xt._core.coreService) {
         xt._core.coreService.triggerDataEvent(seq, true);
       } else if (xt._core) {
         xt._core._onData.fire(seq);
       }
+      refocusTerm();
     }
     var ESC = String.fromCharCode(27);
     document.getElementById('btnUp').addEventListener('click', function() { sendKey(ESC+'[A'); flashBtn(this); });
@@ -368,6 +383,7 @@ const TERMINAL_HTML = `<!DOCTYPE html>
       xt.selectAll();
       showToast('Selected all');
       flashBtn(this);
+      refocusTerm();
     });
 
     document.getElementById('btnCopy').addEventListener('click', function() {
@@ -380,6 +396,7 @@ const TERMINAL_HTML = `<!DOCTYPE html>
         showToast('Copied');
         flashBtn(btn);
         xt.clearSelection();
+        refocusTerm();
       }).catch(function() {
         var ta = document.createElement('textarea');
         ta.value = sel;
@@ -392,6 +409,7 @@ const TERMINAL_HTML = `<!DOCTYPE html>
         showToast('Copied');
         flashBtn(btn);
         xt.clearSelection();
+        refocusTerm();
       });
     });
 
@@ -401,15 +419,16 @@ const TERMINAL_HTML = `<!DOCTYPE html>
       var btn = this;
       navigator.clipboard.readText().then(function(text) {
         if (text) {
-          // Send paste data through the terminal input
           sendKey(text);
           showToast('Pasted');
           flashBtn(btn);
         } else {
           showToast('Clipboard empty');
         }
+        refocusTerm();
       }).catch(function() {
         showToast('Clipboard access denied');
+        refocusTerm();
       });
     });
 
