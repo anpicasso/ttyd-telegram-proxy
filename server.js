@@ -236,8 +236,10 @@ const AUTH_HTML = `<!DOCTYPE html>
 
       // Calculate optimal font size from viewport
       var vw = window.innerWidth || document.documentElement.clientWidth;
-      var fontSize = Math.floor(vw / (80 * 0.62));
-      fontSize = Math.max(10, Math.min(fontSize, 22));
+      // Target ~45 cols on phone (readable), ~80 on tablet/desktop
+      var cols = vw < 500 ? 45 : 80;
+      var fontSize = Math.floor(vw / (cols * 0.6));
+      fontSize = Math.max(13, Math.min(fontSize, 22));
 
       document.getElementById('status').textContent = 'starting terminal...';
 
@@ -272,22 +274,21 @@ const TERMINAL_HTML = `<!DOCTYPE html>
     #toolbar{
       position:fixed;bottom:0;left:0;right:0;
       display:flex;gap:2px;background:#1a1a2e;
-      z-index:100;padding:3px 4px;
+      z-index:100;padding:4px 4px;
       border-top:1px solid #333;
       align-items:center;
     }
     #toolbar button{
       background:#2a2a3e;color:#c8c8d4;
-      border:none;border-radius:5px;
-      padding:9px 0;font-size:11px;
+      border:none;border-radius:6px;
+      padding:9px 0;font-size:12px;
       font-family:-apple-system,system-ui,sans-serif;
       cursor:pointer;-webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
       min-width:0;
     }
     #toolbar .clip{flex:1}
-    #toolbar .arrow{flex:0 0 auto;width:38px;font-size:16px;padding:8px 0}
-    #toolbar .font{flex:0 0 auto;width:34px;font-size:14px;font-weight:bold;padding:8px 0}
+    #toolbar .arrow{flex:0 0 38px;font-size:16px;padding:8px 0}
     #toolbar button:active{background:#7c3aed;color:#fff}
     #toolbar button.flash{background:#22c55e;color:#000;transition:none}
     #toast{
@@ -310,8 +311,6 @@ const TERMINAL_HTML = `<!DOCTYPE html>
     <button class="clip" id="btnSelect" ontouchstart="">Sel</button>
     <button class="clip" id="btnCopy" ontouchstart="">Copy</button>
     <button class="clip" id="btnPaste" ontouchstart="">Paste</button>
-    <button class="font" id="btnFontDown" ontouchstart="">A&#8595;</button>
-    <button class="font" id="btnFontUp" ontouchstart="">A&#8593;</button>
   </div>
   <div id="toast"></div>
   <script>
@@ -361,28 +360,6 @@ const TERMINAL_HTML = `<!DOCTYPE html>
     document.getElementById('btnDown').addEventListener('click', function() { sendKey(ESC+'[B'); flashBtn(this); });
     document.getElementById('btnRight').addEventListener('click', function() { sendKey(ESC+'[C'); flashBtn(this); });
     document.getElementById('btnLeft').addEventListener('click', function() { sendKey(ESC+'[D'); flashBtn(this); });
-
-    // --- Font size adjustment ---
-    function adjustFont(delta) {
-      var term = getTerm();
-      if (!term) return 0;
-      var xt = term.xterm || term;
-      var fs = (xt.options.fontSize || 14) + delta;
-      fs = Math.max(6, Math.min(fs, 30));
-      xt.options.fontSize = fs;
-      // ttyd uses a fit addon internally — trigger resize
-      try { iframe.contentWindow.fitAddon && iframe.contentWindow.fitAddon.fit(); } catch(e) {}
-      try { term.fit && term.fit(); } catch(e) {}
-      return fs;
-    }
-    document.getElementById('btnFontUp').addEventListener('click', function() {
-      var fs = adjustFont(1);
-      if (fs) { showToast('Font: ' + fs + 'px'); flashBtn(this); }
-    });
-    document.getElementById('btnFontDown').addEventListener('click', function() {
-      var fs = adjustFont(-1);
-      if (fs) { showToast('Font: ' + fs + 'px'); flashBtn(this); }
-    });
 
     // --- Clipboard ---
     document.getElementById('btnSelect').addEventListener('click', function() {
@@ -486,7 +463,7 @@ const server = http.createServer((req, res) => {
         }
 
         // Calculate font size from client viewport
-        const fontSize = Math.max(10, Math.min(22, parseInt(payload.fontSize || '16', 10)));
+        const fontSize = Math.max(13, Math.min(22, parseInt(payload.fontSize || '16', 10)));
 
         // Start ttyd (or reuse existing)
         try {
@@ -523,6 +500,13 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(AUTH_HTML);
+    return;
+  }
+
+  // Authenticated root → redirect to terminal wrapper
+  if (pathname === '/') {
+    res.writeHead(302, { 'Location': '/_terminal' });
+    res.end();
     return;
   }
 
