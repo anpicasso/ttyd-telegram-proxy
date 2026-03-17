@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/.hermes/ttyd-proxy
-ExecStart=/usr/bin/env node %h/.hermes/ttyd-proxy/server.js
-EnvironmentFile=%h/.hermes/ttyd-proxy/.env
+WorkingDirectory=/home/xithus/.hermes/ttyd-proxy
+ExecStart=/home/linuxbrew/.linuxbrew/bin/node /home/xithus/.hermes/ttyd-proxy/server.js
+EnvironmentFile=/home/xithus/.hermes/ttyd-proxy/.env
 Restart=always
 RestartSec=3
 

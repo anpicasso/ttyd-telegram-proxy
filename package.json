@@ -1,15 +1,19 @@
 {
   "name": "ttyd-telegram-proxy",
-  "version": "1.0.0",
-  "description": "Telegram Mini App auth proxy for ttyd",
+  "version": "3.0.0",
+  "description": "Telegram Mini App terminal — xterm.js + node-pty with auth",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": ["ttyd", "telegram", "mini-app", "proxy", "terminal", "auth"],
+  "keywords": ["terminal", "telegram", "mini-app", "xterm", "pty", "auth"],
   "author": "anpicasso",
   "license": "MIT",
   "dependencies": {
-    "http-proxy": "^1.18.1"
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
   }
 }
