@@ -461,6 +461,12 @@ const server = http.createServer((req, res) => {
 
   // All other routes require auth
   if (!checkSession(req.headers.cookie)) {
+    // For internal routes, redirect to root to re-trigger auth flow
+    if (pathname === '/_terminal' || pathname.startsWith('/_ttyd')) {
+      res.writeHead(302, { 'Location': '/' });
+      res.end();
+      return;
+    }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(AUTH_HTML);
     return;
