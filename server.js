@@ -271,19 +271,23 @@ const TERMINAL_HTML = `<!DOCTYPE html>
     iframe{width:100%;height:100vh;border:none;display:block}
     #toolbar{
       position:fixed;bottom:0;left:0;right:0;
-      display:flex;gap:1px;background:#1a1a2e;
-      z-index:100;padding:4px 6px;
+      display:flex;gap:2px;background:#1a1a2e;
+      z-index:100;padding:3px 4px;
       border-top:1px solid #333;
+      align-items:center;
     }
     #toolbar button{
-      flex:1;
       background:#2a2a3e;color:#c8c8d4;
-      border:none;border-radius:6px;
-      padding:10px 0;font-size:13px;
+      border:none;border-radius:5px;
+      padding:9px 0;font-size:11px;
       font-family:-apple-system,system-ui,sans-serif;
       cursor:pointer;-webkit-tap-highlight-color:transparent;
       touch-action:manipulation;
+      min-width:0;
     }
+    #toolbar .clip{flex:1}
+    #toolbar .arrow{flex:0 0 auto;width:38px;font-size:16px;padding:8px 0}
+    #toolbar .font{flex:0 0 auto;width:34px;font-size:14px;font-weight:bold;padding:8px 0}
     #toolbar button:active{background:#7c3aed;color:#fff}
     #toolbar button.flash{background:#22c55e;color:#000;transition:none}
     #toast{
@@ -299,9 +303,15 @@ const TERMINAL_HTML = `<!DOCTYPE html>
 <body>
   <iframe id="ttyd" src="/_ttyd/"></iframe>
   <div id="toolbar">
-    <button id="btnSelect" ontouchstart="">Select All</button>
-    <button id="btnCopy" ontouchstart="">Copy</button>
-    <button id="btnPaste" ontouchstart="">Paste</button>
+    <button class="arrow" id="btnUp" ontouchstart="">&#9650;</button>
+    <button class="arrow" id="btnDown" ontouchstart="">&#9660;</button>
+    <button class="arrow" id="btnLeft" ontouchstart="">&#9664;</button>
+    <button class="arrow" id="btnRight" ontouchstart="">&#9654;</button>
+    <button class="clip" id="btnSelect" ontouchstart="">Sel</button>
+    <button class="clip" id="btnCopy" ontouchstart="">Copy</button>
+    <button class="clip" id="btnPaste" ontouchstart="">Paste</button>
+    <button class="font" id="btnFontDown" ontouchstart="">A&#8595;</button>
+    <button class="font" id="btnFontUp" ontouchstart="">A&#8593;</button>
   </div>
   <div id="toast"></div>
   <script>
@@ -321,35 +331,79 @@ const TERMINAL_HTML = `<!DOCTYPE html>
 
     function flashBtn(btn) {
       btn.classList.add('flash');
-      setTimeout(function(){btn.classList.remove('flash')}, 300);
+      setTimeout(function(){btn.classList.remove('flash')}, 200);
     }
 
     function getTerm() {
       try { return iframe.contentWindow.term; } catch(e) { return null; }
     }
+    function getXterm() {
+      var term = getTerm();
+      if (!term) return null;
+      return term.xterm || term;
+    }
 
-    // Select all visible buffer text
-    document.getElementById('btnSelect').addEventListener('click', function() {
+    // --- Arrow keys ---
+    // Send escape sequences via ttyd's websocket (xterm.js _core.triggerDataEvent)
+    function sendKey(seq) {
       var term = getTerm();
       if (!term) return;
-      term.selectAll();
+      // ttyd's term object wraps xterm as term.xterm
+      var xt = term.xterm || term;
+      if (xt._core && xt._core.coreService) {
+        xt._core.coreService.triggerDataEvent(seq, true);
+      } else if (xt._core) {
+        xt._core._onData.fire(seq);
+      }
+    }
+    var ESC = String.fromCharCode(27);
+    document.getElementById('btnUp').addEventListener('click', function() { sendKey(ESC+'[A'); flashBtn(this); });
+    document.getElementById('btnDown').addEventListener('click', function() { sendKey(ESC+'[B'); flashBtn(this); });
+    document.getElementById('btnRight').addEventListener('click', function() { sendKey(ESC+'[C'); flashBtn(this); });
+    document.getElementById('btnLeft').addEventListener('click', function() { sendKey(ESC+'[D'); flashBtn(this); });
+
+    // --- Font size adjustment ---
+    function adjustFont(delta) {
+      var term = getTerm();
+      if (!term) return 0;
+      var xt = term.xterm || term;
+      var fs = (xt.options.fontSize || 14) + delta;
+      fs = Math.max(6, Math.min(fs, 30));
+      xt.options.fontSize = fs;
+      // ttyd uses a fit addon internally — trigger resize
+      try { iframe.contentWindow.fitAddon && iframe.contentWindow.fitAddon.fit(); } catch(e) {}
+      try { term.fit && term.fit(); } catch(e) {}
+      return fs;
+    }
+    document.getElementById('btnFontUp').addEventListener('click', function() {
+      var fs = adjustFont(1);
+      if (fs) { showToast('Font: ' + fs + 'px'); flashBtn(this); }
+    });
+    document.getElementById('btnFontDown').addEventListener('click', function() {
+      var fs = adjustFont(-1);
+      if (fs) { showToast('Font: ' + fs + 'px'); flashBtn(this); }
+    });
+
+    // --- Clipboard ---
+    document.getElementById('btnSelect').addEventListener('click', function() {
+      var xt = getXterm();
+      if (!xt) return;
+      xt.selectAll();
       showToast('Selected all');
       flashBtn(this);
     });
 
-    // Copy current selection to clipboard
     document.getElementById('btnCopy').addEventListener('click', function() {
-      var term = getTerm();
-      if (!term) return;
-      var sel = term.getSelection();
+      var xt = getXterm();
+      if (!xt) return;
+      var sel = xt.getSelection();
       if (!sel) { showToast('Nothing selected'); return; }
       var btn = this;
       navigator.clipboard.writeText(sel).then(function() {
         showToast('Copied');
         flashBtn(btn);
-        term.clearSelection();
+        xt.clearSelection();
       }).catch(function() {
-        // Fallback for restricted contexts
         var ta = document.createElement('textarea');
         ta.value = sel;
         ta.style.position = 'fixed';
@@ -360,18 +414,18 @@ const TERMINAL_HTML = `<!DOCTYPE html>
         document.body.removeChild(ta);
         showToast('Copied');
         flashBtn(btn);
-        term.clearSelection();
+        xt.clearSelection();
       });
     });
 
-    // Paste from clipboard into terminal
     document.getElementById('btnPaste').addEventListener('click', function() {
-      var term = getTerm();
-      if (!term) return;
+      var xt = getXterm();
+      if (!xt) return;
       var btn = this;
       navigator.clipboard.readText().then(function(text) {
         if (text) {
-          term.paste(text);
+          // Send paste data through the terminal input
+          sendKey(text);
           showToast('Pasted');
           flashBtn(btn);
         } else {
