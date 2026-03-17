@@ -351,9 +351,8 @@ const TERMINAL_HTML = `<!DOCTYPE html>
     }
 
     // Prevent buttons from stealing focus (keeps iOS keyboard open)
-    document.getElementById('toolbar').addEventListener('touchstart', function(e) {
-      if (e.target.tagName === 'BUTTON') e.preventDefault();
-    }, { passive: false });
+    // preventDefault on mousedown stops focus shift; touchstart is NOT
+    // prevented because that blocks click/touchend on iOS.
     document.getElementById('toolbar').addEventListener('mousedown', function(e) {
       if (e.target.tagName === 'BUTTON') e.preventDefault();
     });
