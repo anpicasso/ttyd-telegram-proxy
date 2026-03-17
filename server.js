@@ -70,6 +70,7 @@ function validateInitData(initData) {
 // --- PTY management ---
 let ptyProcess = null;
 let idleTimer = null;
+let activeWs = null; // current WebSocket
 
 function resetIdle() {
   if (idleTimer) clearTimeout(idleTimer);
@@ -213,6 +214,7 @@ html, body {
 #term-wrap {
   flex:1; min-width:0; height:100%;
   display:flex; flex-direction:column;
+  position:relative;
 }
 #terminal {
   flex:1; min-height:0;
@@ -280,10 +282,30 @@ body.kb-open #sidebar button .lbl-short { display:inline; }
   pointer-events:none; opacity:0; transition:opacity .2s; z-index:200;
 }
 #toast.show { opacity:1; }
+
+/* Loading overlay */
+#loading {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:var(--bg); z-index:50;
+  transition:opacity .3s;
+}
+#loading.hidden { opacity:0; pointer-events:none; }
+.ldspinner {
+  width:28px; height:28px;
+  border:3px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:spin .7s linear infinite;
+  margin-bottom:.7rem;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+.ldtext { font-size:.85rem; color:var(--text-dim); }
 </style>
 </head><body>
 <div id="container">
-  <div id="term-wrap"><div id="terminal"></div></div>
+  <div id="term-wrap">
+    <div id="loading"><div class="ldspinner"></div><div class="ldtext">connecting...</div></div>
+    <div id="terminal"></div>
+  </div>
   <div id="sidebar">
     <div class="group arrows">
       <button id="btnUp">▲</button>
@@ -371,6 +393,9 @@ body.kb-open #sidebar button .lbl-short { display:inline; }
   var ws = new WebSocket(proto + '//' + location.host + '/_ws');
 
   ws.onopen = function() {
+    // Hide loading spinner
+    var ld = document.getElementById('loading');
+    if (ld) ld.classList.add('hidden');
     // Send initial size
     ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
   };
@@ -589,7 +614,17 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 wss.on('connection', (ws) => {
-  let p = null;
+  // Update the active WebSocket — PTY output always goes to the latest connection
+  activeWs = ws;
+  console.log('WS connected');
+
+  // If PTY already exists, wire it to this new WS (rebind)
+  if (ptyProcess && !ptyProcess._wsBound) {
+    ptyProcess._wsBound = true;
+    ptyProcess.onData((data) => {
+      if (activeWs && activeWs.readyState === 1) activeWs.send(data);
+    });
+  }
 
   ws.on('message', (msg) => {
     resetIdle();
@@ -601,12 +636,12 @@ wss.on('connection', (ws) => {
       if (ctrl.type === 'resize') {
         const cols = Math.max(10, Math.min(500, ctrl.cols || 80));
         const rows = Math.max(2, Math.min(200, ctrl.rows || 24));
-        p = ensurePty(cols, rows);
-        // Wire up PTY output if not already
+        const p = ensurePty(cols, rows);
+        // Bind PTY output to active WS (uses activeWs ref, not closure)
         if (!p._wsBound) {
           p._wsBound = true;
           p.onData((data) => {
-            if (ws.readyState === 1) ws.send(data);
+            if (activeWs && activeWs.readyState === 1) activeWs.send(data);
           });
         }
         return;
@@ -615,14 +650,13 @@ wss.on('connection', (ws) => {
     } catch {}
 
     // Regular terminal input
-    if (p) p.write(str);
+    if (ptyProcess) ptyProcess.write(str);
     else {
-      // PTY not started yet — start with defaults
-      p = ensurePty(80, 24);
+      const p = ensurePty(80, 24);
       if (!p._wsBound) {
         p._wsBound = true;
         p.onData((data) => {
-          if (ws.readyState === 1) ws.send(data);
+          if (activeWs && activeWs.readyState === 1) activeWs.send(data);
         });
       }
       p.write(str);
@@ -630,8 +664,12 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    // Don't kill PTY on disconnect — reuse for next connection
-    console.log('WS closed');
+    if (activeWs === ws) {
+      // Don't null it — next connection will replace it
+      console.log('WS closed (was active)');
+    } else {
+      console.log('WS closed (stale)');
+    }
   });
 });
 
