@@ -1,34 +1,37 @@
-# terminal-proxy
+# tg-terminal
 
-A Telegram Mini App that gives you a full terminal in your phone. Authenticates via Telegram's cryptographic initData, then connects you to a real PTY over WebSocket with xterm.js.
+A Telegram Mini App that gives you a full terminal on your phone. Authenticates via Telegram's cryptographic initData, then connects you to a real PTY over WebSocket with xterm.js.
 
-No ttyd dependency — uses xterm.js + node-pty directly.
+Built by **Yuqi** — a [Hermes Agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com), working with [Angello Picasso](https://github.com/anpicasso).
+
+**Current use case:** Mobile server management for a Hermes Agent running on a remote Linux server — full terminal access from Telegram, anywhere.
 
 ## How It Works
 
 ```
 ┌─────────────┐     HTTPS     ┌──────────────────┐    PTY     ┌──────────────┐
-│  Telegram    │ ──────────── │  terminal-proxy   │ ────────── │  /bin/bash   │
+│  Telegram    │ ──────────── │  tg-terminal      │ ────────── │  /bin/bash   │
 │  Mini App    │  (Funnel/    │  xterm.js + auth  │  node-pty  │  (on-demand) │
 │  in chat     │   reverse)   │  (:8443)          │            │              │
 └─────────────┘               └──────────────────┘            └──────────────┘
 ```
 
 1. You tap "Terminal" in Telegram — the auth page validates initData (HMAC-SHA256)
-2. A session cookie is set and you're served the terminal UI
-3. xterm.js connects via WebSocket — the server spawns a PTY on first input
+2. xterm.js initializes in-place — one spinner from auth through terminal ready
+3. WebSocket connects, server spawns a PTY on first input
 4. Full terminal: vim, htop, colors, resize, everything works
 5. After 30 min idle (configurable), the PTY is killed automatically
 
 ## Features
 
-- **Real terminal** — xterm.js + node-pty, not a command-response UI
+- **Real terminal** — xterm.js + node-pty, full VT100/xterm emulation
 - **On-demand PTY** — shell only runs when you're using it
+- **Single page** — one loading spinner covers auth → init → connect
 - **Responsive** — font size adapts to viewport (phones get ~45 cols, tablets/desktop ~80)
 - **Right-side button bar** — arrows (▲▼◀▶) + clipboard (Select, Copy, Paste)
-- **Keyboard-aware** — buttons shrink to S/C/P when keyboard is open
-- **Themed** — dark UI matching the auth page design system
-- **Single session** — reconnects reuse the same PTY
+- **Keyboard-aware** — buttons shrink to S/C/P when the keyboard is open
+- **Themed** — dark purple-accent UI
+- **Session reuse** — reconnects pick up the same PTY
 - **Idle timeout** — auto-kills PTY after configurable inactivity
 
 ## Prerequisites
@@ -109,7 +112,7 @@ The terminal has a right-side button bar that stays the same height as the termi
 
 When the keyboard opens, buttons shrink to `S`, `C`, `P` to save space.
 
-Clipboard works through the toolbar (xterm.js canvas doesn't support native text selection).
+Clipboard works through the toolbar — xterm.js renders to canvas, so native text selection doesn't apply.
 
 ## Environment Variables
 
@@ -117,7 +120,7 @@ Clipboard works through the toolbar (xterm.js canvas doesn't support native text
 |----------|----------|---------|-------------|
 | `TELEGRAM_BOT_TOKEN` | ✅ | — | Bot token from BotFather |
 | `TELEGRAM_ALLOWED_USERS` | ✅ | — | Your Telegram user ID |
-| `PROXY_PORT` | | `8443` | Port for the proxy |
+| `PROXY_PORT` | | `8443` | Port for the server |
 | `TTYD_SHELL` | | `/bin/bash` | Shell to spawn |
 | `TTYD_IDLE_TIMEOUT` | | `1800` | Seconds idle before killing PTY |
 
@@ -131,6 +134,10 @@ Clipboard works through the toolbar (xterm.js canvas doesn't support native text
 | WebSocket | Session cookie required for upgrade |
 | Bind address | 127.0.0.1 only (requires HTTPS reverse proxy) |
 | Idle timeout | PTY auto-killed after inactivity |
+
+## Credits
+
+Built by **Yuqi** ([Hermes Agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com)), the AI assistant of [Angello Picasso](https://github.com/anpicasso). Yuqi handles infrastructure, development, and server management through [Hermes](https://github.com/NousResearch/hermes-agent) — and this terminal is how Angello manages the server she runs on, from his phone.
 
 ## License
 
