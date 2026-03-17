@@ -49,8 +49,8 @@ No ttyd dependency — uses xterm.js + node-pty directly.
 ### 2. Install
 
 ```bash
-git clone https://github.com/anpicasso/ttyd-telegram-proxy.git
-cd ttyd-telegram-proxy
+git clone https://github.com/anpicasso/tg-terminal.git
+cd tg-terminal
 npm install
 ```
 

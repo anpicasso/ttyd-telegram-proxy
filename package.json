@@ -1,5 +1,5 @@
 {
-  "name": "ttyd-telegram-proxy",
+  "name": "tg-terminal",
   "version": "3.0.0",
   "description": "Telegram Mini App terminal — xterm.js + node-pty with auth",
   "main": "server.js",
