@@ -167,7 +167,6 @@ function fail(m){document.getElementById('spin').style.display='none';document.g
 if(!tg||!tg.initData){fail('Open from Telegram.')}else{
   tg.ready();tg.expand();
   document.body.style.background=tg.themeParams.bg_color||'#0e0e1a';
-  document.getElementById('status').textContent='starting terminal...';
   var vw=window.innerWidth||document.documentElement.clientWidth;
   var vh=window.innerHeight||document.documentElement.clientHeight;
   fetch('/_auth',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -288,9 +287,13 @@ body.kb-open #sidebar button .lbl-short { display:inline; }
   position:absolute; top:0; left:0; right:0; bottom:0;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   background:var(--bg); z-index:50;
-  transition:opacity .3s;
+  transition:opacity .4s;
 }
 #loading.hidden { opacity:0; pointer-events:none; }
+#loading .logo {
+  font-size:1.4rem; letter-spacing:.05em; color:var(--accent);
+  margin-bottom:1.2rem;
+}
 .ldspinner {
   width:28px; height:28px;
   border:3px solid var(--border); border-top-color:var(--accent);
@@ -303,7 +306,7 @@ body.kb-open #sidebar button .lbl-short { display:inline; }
 </head><body>
 <div id="container">
   <div id="term-wrap">
-    <div id="loading"><div class="ldspinner"></div><div class="ldtext">connecting...</div></div>
+    <div id="loading"><div class="logo">█ terminal</div><div class="ldspinner"></div><div class="ldtext">loading...</div></div>
     <div id="terminal"></div>
   </div>
   <div id="sidebar">
@@ -392,15 +395,21 @@ body.kb-open #sidebar button .lbl-short { display:inline; }
   var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   var ws = new WebSocket(proto + '//' + location.host + '/_ws');
 
-  ws.onopen = function() {
-    // Hide loading spinner
+  var loadingHidden = false;
+  function hideLoading() {
+    if (loadingHidden) return;
+    loadingHidden = true;
     var ld = document.getElementById('loading');
     if (ld) ld.classList.add('hidden');
+  }
+
+  ws.onopen = function() {
     // Send initial size
     ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
   };
 
   ws.onmessage = function(e) {
+    hideLoading();
     term.write(e.data);
   };
 
